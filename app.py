@@ -190,6 +190,7 @@ else:
                 
                 risk_scores = []
                 statuses = []
+                reasons = []  # <--- New list to hold reasons
                 high_risk_count = 0
                 
                 # Loop dataset through backend algorithms
@@ -201,10 +202,15 @@ else:
                     amount = row["Total Claim Amount ($)"]
                     days = row["Days Spent in Hospital"]
                     
-                    is_mismatch, _ = check_biological_mismatch(age, gender, illness)
+                    # Run the mismatch checker and grab the reason if it exists
+                    is_mismatch, mismatch_reason = check_biological_mismatch(age, gender, illness)
                     
-                    if is_mismatch or illness not in ILLNESS_MAPPING:
+                    if is_mismatch:
                         score_percentage = 100.0
+                        flag_reason = mismatch_reason
+                    elif illness not in ILLNESS_MAPPING:
+                        score_percentage = 100.0
+                        flag_reason = f"Unknown diagnosis code: '{illness}'"
                     else:
                         derived_stay = calculate_stay_category(days)
                         derived_tier = calculate_bill_tier(amount)
@@ -217,8 +223,15 @@ else:
                         }])
                         input_encoded = preprocessor.transform(input_df)
                         score_percentage = model.predict_proba(input_encoded)[0][1] * 100
+                        
+                        # Provide reasoning context based on the AI output
+                        if score_percentage > 50.0:
+                            flag_reason = f"AI Risk Score threshold exceeded ({score_percentage:.1f}%)"
+                        else:
+                            flag_reason = "Passed baseline verification profiles"
                     
                     risk_scores.append(round(score_percentage, 1))
+                    reasons.append(flag_reason)  # <--- Store the reason for this row
                     
                     if score_percentage > 50.0:
                         high_risk_count += 1
@@ -229,7 +242,7 @@ else:
                 # Append analysis back into dataset
                 df["Fraud Risk Score (%)"] = [f"{s:.1f}%" for s in risk_scores]
                 df["Audit Status"] = statuses
-                
+                df["Reason for Flag"] = reasons  # <--- Add the new column to your Excel output
                 # Total High Risk Proportion Calculation
                 total_claims = len(df)
                 fraud_ratio_pct = (high_risk_count / total_claims) * 100
