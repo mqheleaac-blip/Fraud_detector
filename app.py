@@ -103,6 +103,8 @@ with left_panel:
 
     col1, col2 = st.columns(2)
     with col1:
+        
+        policy_id = st.text_input("📋 Enter Policy ID / Claim Number", value="POL-1001")
         age = st.number_input("Patient Age", min_value=0, max_value=120, value=20)
         gender = st.selectbox("Patient Gender", ["Male", "Female"], index=0)
         selected_illness = st.selectbox("Diagnosis", list(ILLNESS_MAPPING.keys()))
@@ -209,3 +211,26 @@ with right_panel:
             """,
             unsafe_allow_html=True
         )
+# Create a dictionary of the current claim data including the Policy ID
+report_data = {
+    "Policy ID": [policy_id],
+    "Risk Score (%)": [f"{score_percentage:.1f}%"],
+    "Age": [age],
+    "Gender": [gender],
+    "Bill Amount": [bill_amount],
+    "Length of Stay": [length_of_stay],
+    "Status": ["REJECTED / HIGH RISK" if score_percentage > 70 or is_mismatch else "APPROVED / LOW RISK"]
+}
+
+# Convert it into a downloadable CSV format
+import pandas as pd
+df_report = pd.DataFrame(report_data)
+csv_data = df_report.to_csv(index=False).encode('utf-8')
+
+# Add the download button to the UI
+st.download_button(
+    label=f"📥 Download Audit Report for {policy_id} (CSV)",
+    data=csv_data,
+    file_name=f"audit_report_{policy_id}.csv",
+    mime="text/csv",
+)
