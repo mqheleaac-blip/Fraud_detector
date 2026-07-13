@@ -94,7 +94,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
 # --- Two-Column Layout ---
 left_panel, right_panel = st.columns([2, 1], gap="large")
 
@@ -103,14 +102,13 @@ with left_panel:
 
     col1, col2 = st.columns(2)
     with col1:
-        
         policy_id = st.text_input("📋 Enter Policy ID / Claim Number", value="POL-1001")
         age = st.number_input("Patient Age", min_value=0, max_value=120, value=20)
         gender = st.selectbox("Patient Gender", ["Male", "Female"], index=0)
         selected_illness = st.selectbox("Diagnosis", list(ILLNESS_MAPPING.keys()))
 
     with col2:
-        raw_bill_amount = st.number_input("Total Claim Amount ($)", min_value=0.0, value=1000000.0, step=50.0)
+        raw_bill_amount = st.number_input("Total Claim Amount ($)", min_value=0.0, value=1000.0, step=50.0)
         days_hospitalized = st.number_input("Days Spent in Hospital", min_value=0, value=1)
 
         # Spacing block to keep layout clean
@@ -132,7 +130,8 @@ with right_panel:
         bio_mismatch_numeric = 1 if is_mismatch else 0
 
         if is_mismatch:
-            # 1. Shows ONLY when there is a flat-out data mismatch (e.g., Male + Pregnancy)
+            score_percentage = 100.0
+            # Shows ONLY when there is a flat-out data mismatch (e.g., Male + Pregnancy)
             st.markdown(
                 """
                 <div style='background-color: #EE312A; color: white; padding: 1rem; border-radius: 6px; text-align: center; margin-bottom: 1rem;'>
@@ -175,7 +174,7 @@ with right_panel:
                 st.markdown(
                     """
                     <div style='background-color: #EE312A; color: white; padding: 1rem; border-radius: 6px; text-align: center; margin-bottom: 1rem;'>
-                        <b style='letter-spacing: 1px;'>CRITICAL AUDIT EXCEPTION: HIGH RISK DETECTED</b>
+                        <b style='letter-spacing: 1px;'>⚠️ REVIEW REQUIRED: HIGH RISK DETECTED</b>
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -201,6 +200,29 @@ with right_panel:
                 """,
                 unsafe_allow_html=True
             )
+
+        # --- Build and Show the CSV Download Button Inside the Action Trigger ---
+        st.markdown("<br>", unsafe_allow_html=True)
+        report_data = {
+            "Policy ID": [policy_id],
+            "Risk Score (%)": [f"{score_percentage:.1f}%"],
+            "Age": [age],
+            "Gender": [gender],
+            "Bill Amount": [raw_bill_amount],
+            "Length of Stay": [days_hospitalized],
+            "Status": ["REJECTED / HIGH RISK" if score_percentage > 70 or is_mismatch else "APPROVED / LOW RISK"]
+        }
+
+        df_report = pd.DataFrame(report_data)
+        csv_data = df_report.to_csv(index=False).encode('utf-8')
+
+        st.download_button(
+            label=f"📥 Download Audit Report for {policy_id} (CSV)",
+            data=csv_data,
+            file_name=f"audit_report_{policy_id}.csv",
+            mime="text/csv",
+        )
+        
     else:
         # Standard display before running the scanner (Completely neutral state)
         st.markdown(
@@ -211,26 +233,3 @@ with right_panel:
             """,
             unsafe_allow_html=True
         )
-# Create a dictionary of the current claim data including the Policy ID
-report_data = {
-    "Policy ID": [policy_id],
-    "Risk Score (%)": [f"{score_percentage:.1f}%"],
-    "Age": [age],
-    "Gender": [gender],
-    "Bill Amount": [bill_amount],
-    "Length of Stay": [length_of_stay],
-    "Status": ["REJECTED / HIGH RISK" if score_percentage > 70 or is_mismatch else "APPROVED / LOW RISK"]
-}
-
-# Convert it into a downloadable CSV format
-import pandas as pd
-df_report = pd.DataFrame(report_data)
-csv_data = df_report.to_csv(index=False).encode('utf-8')
-
-# Add the download button to the UI
-st.download_button(
-    label=f"📥 Download Audit Report for {policy_id} (CSV)",
-    data=csv_data,
-    file_name=f"audit_report_{policy_id}.csv",
-    mime="text/csv",
-)
