@@ -190,7 +190,7 @@ else:
                 
                 risk_scores = []
                 statuses = []
-                reasons = []  # <--- New list to hold reasons
+                reasons = []
                 high_risk_count = 0
                 
                 # Loop dataset through backend algorithms
@@ -198,23 +198,31 @@ else:
                     p_id = row["Policy ID"]
                     age = row["Age"]
                     gender = str(row["Gender"]).strip()
-                    illness = str(row["Diagnosis"]).strip()
+                    illness_raw = str(row["Diagnosis"]).strip()
                     amount = row["Total Claim Amount ($)"]
                     days = row["Days Spent in Hospital"]
                     
-                    # Run the mismatch checker and grab the reason if it exists
-                    is_mismatch, mismatch_reason = check_biological_mismatch(age, gender, illness)
+                    # Smart Matching: Find if the excel diagnosis is part of our allowed keys
+                    matched_key = None
+                    for key in ILLNESS_MAPPING.keys():
+                        if illness_raw.lower() in key.lower() or key.lower() in illness_raw.lower():
+                            matched_key = key
+                            break
+                    
+                    # Run the biological check using the matched key if found
+                    check_key = matched_key if matched_key else illness_raw
+                    is_mismatch, mismatch_reason = check_biological_mismatch(age, gender, check_key)
                     
                     if is_mismatch:
                         score_percentage = 100.0
                         flag_reason = mismatch_reason
-                    elif illness not in ILLNESS_MAPPING:
+                    elif matched_key is None:
                         score_percentage = 100.0
-                        flag_reason = f"Unknown diagnosis code: '{illness}'"
+                        flag_reason = f"Unknown diagnosis code: '{illness_raw}'"
                     else:
                         derived_stay = calculate_stay_category(days)
                         derived_tier = calculate_bill_tier(amount)
-                        derived_diagnosis = ILLNESS_MAPPING[illness]
+                        derived_diagnosis = ILLNESS_MAPPING[matched_key]
                         
                         input_df = pd.DataFrame([{
                             "Age": age, "Gender": gender, "Diagnosis_Group": derived_diagnosis,
@@ -224,14 +232,14 @@ else:
                         input_encoded = preprocessor.transform(input_df)
                         score_percentage = model.predict_proba(input_encoded)[0][1] * 100
                         
-                        # Provide reasoning context based on the AI output
+                        # Set custom reasoning based on your request
                         if score_percentage > 50.0:
-                            flag_reason = f"AI Risk Score threshold exceeded ({score_percentage:.1f}%)"
+                            flag_reason = "AI detected it as a fraudulent claim"
                         else:
                             flag_reason = "Passed baseline verification profiles"
                     
                     risk_scores.append(round(score_percentage, 1))
-                    reasons.append(flag_reason)  # <--- Store the reason for this row
+                    reasons.append(flag_reason)
                     
                     if score_percentage > 50.0:
                         high_risk_count += 1
@@ -242,7 +250,7 @@ else:
                 # Append analysis back into dataset
                 df["Fraud Risk Score (%)"] = [f"{s:.1f}%" for s in risk_scores]
                 df["Audit Status"] = statuses
-                df["Reason for Flag"] = reasons  # <--- Add the new column to your Excel output
+                df["Reason for Flag"] = reasons
                 # Total High Risk Proportion Calculation
                 total_claims = len(df)
                 fraud_ratio_pct = (high_risk_count / total_claims) * 100
