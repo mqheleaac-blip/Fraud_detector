@@ -182,7 +182,8 @@ else:
                 df = pd.read_excel(uploaded_file)
                 
             st.success("File processed successfully!")
-            
+            # Strip invisible trailing/leading spaces from the column names
+            df.columns = df.columns.str.strip()
             # Map required matching columns
             required_cols = ["Policy ID", "Age", "Gender", "Diagnosis", "Total Claim Amount ($)", "Days Spent in Hospital"]
             if all(col in df.columns for col in required_cols):
